@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Chixel - For Makin' Pixels</title>
+    <script type="text/javascript">
+      var selectedColor = {red:0, green:0, blue:0, alpha:1};
+      var colors = [selectedColor];
+      var luminosityColors = [];
+      var width = 5;
+      var height = 5;
+      var layers = [];
+      var zoom = 20;
+      var previewCanvas;
+
+      var onLoad = function(event) {
+        var canvas = document.getElementById("canvas");
+        canvas.width = width * zoom;
+        canvas.height = height * zoom;
+        addLayer();
+        previewCanvas = document.createElement("canvas");
+        previewCanvas.width = width;
+        previewCanvas.height = height;
+        updateColorPalette();
+        render();
+      };
+
+      var addLayer = function() {
+        var layer = [];
+        for (var i = 0; i < height; i++) {
+          for (var j = 0; j < width; j ++) {
+            layer.push({red:0, green:0, blue:0, alpha:0});
+          }
+        }
+        layers.push(layer);
+      };
+
+      var render = function() {
+        var canvas = document.getElementById("canvas");
+        var context = canvas.getContext("2d");
+        // draw background
+        context.fillStyle = "#ECECEC";
+        var lineWidth = 8;
+        var lineSpacing = 20 + lineWidth;
+        for (i = 1; i < canvas.width * 2; i += lineSpacing) {
+          context.beginPath();
+          context.moveTo(i, 0);
+          context.lineTo(0, i);
+          context.lineTo(0, i + lineWidth);
+          context.lineTo(i + lineWidth, 0);
+          context.closePath();
+          context.fill();
+        }
+
+        for (var i = 0; i < layers.length; i ++) {
+          var layer = layers[i];
+          for (var j = 0; j < layer.length; j ++) {
+            var pixel = layer[j];
+            context.fillStyle = "rgba(" + pixel.red + "," + pixel.green + "," + pixel.blue + "," + pixel.alpha + ")";
+            context.fillRect((j % width) * zoom, Math.floor(j / width) * zoom, zoom, zoom);
+          }
+        }
+        // update preview
+        previewCanvas.getContext("2d").drawImage(canvas, 0, 0, previewCanvas.width, previewCanvas.height);
+        var dataURL = previewCanvas.toDataURL();
+        document.getElementById('preview').src = dataURL;
+      };
+
+      var onColorPickerChange = function(event) {
+        // update selectedColor
+        var colorInput = document.getElementById("colorInput");
+        var color = colorInput.value.substr(1);
+        updateSelectedColor(parseInt(color[0] + color[1], 16), parseInt(color[2] + color[3], 16), parseInt(color[4] + color[5], 16));
+      };
+
+      var onCanvasMouseDown = function(event) {
+        draw(event.offsetX, event.offsetY, true);
+        window.addEventListener("mouseup", onWindowMouseUp, true);
+        document.getElementById("canvas").addEventListener("mousemove", onCanvasMouseMove, true);
+      };
+
+      var onCanvasMouseMove = function(event) {
+        draw(event.offsetX, event.offsetY, true);
+      };
+
+      var onWindowMouseUp = function(event) {
+        window.removeEventListener("mouseup", onWindowMouseUp, true);
+        document.getElementById("canvas").removeEventListener("mousemove", onCanvasMouseMove, true);
+      };
+
+      var colorSize = 20;
+      var updateColorPalette = function() {
+        var colorPalette = document.getElementById("colorPalette");
+        var context = colorPalette.getContext("2d");
+        colorPalette.width = colorSize * colors.length;
+        colorPalette.height = colorSize;
+        for (var i = 0; i < colors.length; i ++) {
+          var paletteColor = colors[i];
+          context.fillStyle = "rgba(" + paletteColor.red + "," + paletteColor.green + "," + paletteColor.blue + ",1)";
+          context.fillRect(i * colorSize, 0, colorSize, colorSize);
+        }
+      };
+
+      var onColorPaletteMouseDown = function(event) {
+        var colorIndex = Math.floor(event.offsetX / colorSize);
+        updateSelectedColor(colors[colorIndex].red, colors[colorIndex].green, colors[colorIndex].blue);
+        updateLuminosity();
+      };
+
+      var updateSelectedColor = function(red, green, blue) {
+        selectedColor = {
+          red: Math.round(red),
+          green: Math.round(green),
+          blue: Math.round(blue),
+          alpha: 1
+        };
+        var colorInput = document.getElementById("colorInput");
+        var hexColor = intToHex(selectedColor.red, 2) + intToHex(selectedColor.green, 2) + intToHex(selectedColor.blue, 2);
+        console.log(hexColor);
+        colorInput.value = "#" + hexColor;
+      };
+
+      var intToHex = function(int, length) {
+        var hex = int.toString(16);
+        while (hex.length < length)
+          hex = "0" + hex;
+
+        return hex;
+      };
+
+      var draw = function(x, y, rawCoords) {
+        // offsetX, offsetY
+        if (rawCoords) {
+          x = Math.floor(x / zoom);
+          y = Math.floor(y / zoom);
+        }
+        var pixel = layers[0][x + y * width];
+        pixel.red = selectedColor.red;
+        pixel.green = selectedColor.green;
+        pixel.blue = selectedColor.blue;
+        pixel.alpha = selectedColor.alpha;
+
+        // add new color to colors (colorPalette)
+        var colorFound = false;
+        for (var i = 0; i < colors.length; i ++) {
+          var paletteColor = colors[i];
+          if (selectedColor.red == paletteColor.red &&
+            selectedColor.green == paletteColor.green &&
+            selectedColor.blue == paletteColor.blue)
+            colorFound = true;
+        }
+        if (!colorFound) {
+          colors.push(selectedColor);
+          updateColorPalette();
+        }
+
+        render();
+      };
+
+      var onColorLuminosityMouseDown = function(event) {
+        var colorIndex = Math.floor(event.offsetX / colorSize);
+        updateSelectedColor(luminosityColors[colorIndex].red, luminosityColors[colorIndex].green, luminosityColors[colorIndex].blue);
+        updateLuminosity();
+      };
+
+      var updateLuminosity = function(event) {
+        canvas = document.getElementById("colorLuminosity");
+        canvas.width = 10 * colorSize;
+        canvas.height = colorSize;
+        context = canvas.getContext("2d");
+
+        // var hue = .5;
+        // var saturation = .5;
+        // var hueShift = -.01;
+
+        // var hue = parseFloat(document.getElementById("hueInput").value);
+        // var saturation = parseFloat(document.getElementById("saturationInput").value);
+        // var hueShift = parseFloat(document.getElementById("hueShiftInput").value);
+        var hsl = rgbToHsl(selectedColor.red, selectedColor.green, selectedColor.blue);
+        var hue = hsl[0];
+        // TODO: add in input for hue shift (towards a target color)
+        // var hueShift = -.1;
+        var hueShift = 0;
+        var saturation = hsl[1];
+        luminosityColors = [];
+        for (var i = 0; i <= 9; i ++) {
+          var lightness = i / 9;
+          hue += hueShift * lightness;
+          hue %= 1;
+          var color = hslToRgb(hue, saturation, lightness);
+          color[0] = Math.round(color[0]);
+          color[1] = Math.round(color[1]);
+          color[2] = Math.round(color[2]);
+          luminosityColors.push({red: color[0], green: color[1], blue: color[2], alpha: 1});
+          context.fillStyle = "rgba(" + Math.round(color[0]) + "," + Math.round(color[1]) + "," + Math.round(color[2]) + ",1)";
+          context.fillRect(i * colorSize, 0, colorSize, colorSize);
+        }
+      }
+
+      var onImageResize = function() {
+        var newWidth = parseInt(document.getElementById("widthInput").value);
+        var newHeight = parseInt(document.getElementById("heightInput").value);
+        var newLayers = [];
+        var deltaWidth = newWidth - width;
+        var usableWidth = (width < newWidth) ? width : newWidth;
+        var deltaHeight = newHeight - height;
+        var usableHeight = (height < newHeight) ? height : newHeight;
+        
+        // take as many of the old width as we can
+        // then advance the old height and start from there
+        for (var i = 0; i < layers.length; i ++) {
+          var newLayer = [];
+          var layer = layers[i];
+          for (var j = 0; j < newHeight; j ++) {
+            if (j < height) {
+              var spliced = layer.splice(0, usableWidth);
+              if (usableWidth < width)
+                layer.splice(0, width - usableWidth);
+              newLayer = newLayer.concat(spliced);
+              for (var k = 0; k < deltaWidth; k ++) {
+                newLayer.push({red:0, green:0, blue:0, alpha:0});
+              }
+            }
+            else {
+              for (k = 0; k < newWidth; k ++)
+               newLayer.push({red:0, green:0, blue:0, alpha:0}); 
+            }
+          }
+          newLayers.push(newLayer);
+        }
+
+        layers = newLayers;
+        width = newWidth;
+        height = newHeight;
+
+        var canvas = document.getElementById("canvas");
+        canvas.width = width * zoom;
+        canvas.height = height * zoom;
+        previewCanvas.width = width;
+        previewCanvas.height = height;
+        render();
+      };
+
+      var rgbToHsl = function(r, g, b) {
+        r /= 255, g /= 255, b /= 255;
+        var max = Math.max(r, g, b), min = Math.min(r, g, b);
+        var h, s, l = (max + min) / 2;
+
+        if(max == min)
+          h = s = 0; // achromatic
+        else {
+          var d = max - min;
+          s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+          switch(max) {
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case g: h = (b - r) / d + 2; break;
+            case b: h = (r - g) / d + 4; break;
+          }
+          h /= 6;
+        }
+
+        return [h, s, l];
+      }
+
+      var hslToRgb = function(h, s, l) {
+        var r, g, b;
+
+        if(s == 0)
+            r = g = b = l; // achromatic
+        else {
+          function hue2rgb(p, q, t) {
+            if(t < 0) t += 1;
+            if(t > 1) t -= 1;
+            if(t < 1/6) return p + (q - p) * 6 * t;
+            if(t < 1/2) return q;
+            if(t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+            return p;
+          }
+
+          var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+          var p = 2 * l - q;
+          r = hue2rgb(p, q, h + 1/3);
+          g = hue2rgb(p, q, h);
+          b = hue2rgb(p, q, h - 1/3);
+        }
+
+        return [r * 255, g * 255, b * 255];
+      }
+
+      var rgbToHsv = function(r, g, b) {
+        r = r/255, g = g/255, b = b/255;
+        var max = Math.max(r, g, b), min = Math.min(r, g, b);
+        var h, s, v = max;
+
+        var d = max - min;
+        s = max == 0 ? 0 : d / max;
+
+        if(max == min){
+            h = 0; // achromatic
+        }else{
+            switch(max){
+                case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                case g: h = (b - r) / d + 2; break;
+                case b: h = (r - g) / d + 4; break;
+            }
+            h /= 6;
+        }
+
+        return [h, s, v];
+      }
+
+      var hsvToRgb = function(h, s, v) {
+        var r, g, b;
+
+        var i = Math.floor(h * 6);
+        var f = h * 6 - i;
+        var p = v * (1 - s);
+        var q = v * (1 - f * s);
+        var t = v * (1 - (1 - f) * s);
+
+        switch(i % 6) {
+          case 0: r = v, g = t, b = p; break;
+          case 1: r = q, g = v, b = p; break;
+          case 2: r = p, g = v, b = t; break;
+          case 3: r = p, g = q, b = v; break;
+          case 4: r = t, g = p, b = v; break;
+          case 5: r = v, g = p, b = q; break;
+        }
+
+        return [r * 255, g * 255, b * 255];
+      }
+    </script>
+  </head>
+  <body onload="onLoad(event)">
+    <span id="controls">
+      <div>
+        <input id="colorInput" onchange="onColorPickerChange(event)" type="color" value="#000000"></input>
+        <canvas id="colorLuminosity" onmousedown="onColorLuminosityMouseDown(event)" width="20" height="20"></canvas>
+        <canvas id="colorPalette" onmousedown="onColorPaletteMouseDown(event)"></canvas>
+      </div>
+      <div>
+        <input id="alphaInput" type="number" value="1"></input>
+        <input id="widthInput" type="number" value="5" onchange="onImageResize()"></input>
+        <input id="heightInput" type="number" value="5" onchange="onImageResize()"></input>
+      </div>
+    </span>
+    <div>
+      <canvas id="canvas" style="border-color: #000000;border-width: 2px;border-style: solid;user-select: none;" onmousedown="onCanvasMouseDown(event)"></canvas>
+      <image id="preview"></image>
+    </div>
+  </body>
+</html>
