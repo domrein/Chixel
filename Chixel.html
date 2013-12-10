@@ -38,31 +38,43 @@
         var canvas = document.getElementById("canvas");
         var context = canvas.getContext("2d");
         // draw background
-        context.fillStyle = "#ECECEC";
-        var lineWidth = 8;
-        var lineSpacing = 20 + lineWidth;
-        for (i = 1; i < canvas.width * 2; i += lineSpacing) {
-          context.beginPath();
-          context.moveTo(i, 0);
-          context.lineTo(0, i);
-          context.lineTo(0, i + lineWidth);
-          context.lineTo(i + lineWidth, 0);
-          context.closePath();
-          context.fill();
-        }
-
-        for (var i = 0; i < layers.length; i ++) {
-          var layer = layers[i];
-          for (var j = 0; j < layer.length; j ++) {
-            var pixel = layer[j];
-            context.fillStyle = "rgba(" + pixel.red + "," + pixel.green + "," + pixel.blue + "," + pixel.alpha + ")";
-            context.fillRect((j % width) * zoom, Math.floor(j / width) * zoom, zoom, zoom);
+        var drawBackground = function() {
+          context.fillStyle = "#ECECEC";
+          var lineWidth = 8;
+          var lineSpacing = 20 + lineWidth;
+          for (i = 1; i < canvas.width * 2; i += lineSpacing) {
+            context.beginPath();
+            context.moveTo(i, 0);
+            context.lineTo(0, i);
+            context.lineTo(0, i + lineWidth);
+            context.lineTo(i + lineWidth, 0);
+            context.closePath();
+            context.fill();
           }
-        }
+        };
+
+        // draw pixels
+        var drawPixels = function() {
+          for (var i = 0; i < layers.length; i ++) {
+            var layer = layers[i];
+            for (var j = 0; j < layer.length; j ++) {
+              var pixel = layer[j];
+              context.fillStyle = "rgba(" + pixel.red + "," + pixel.green + "," + pixel.blue + "," + pixel.alpha + ")";
+              context.fillRect((j % width) * zoom, Math.floor(j / width) * zoom, zoom, zoom);
+            }
+          }
+        };
+
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        drawPixels();
         // update preview
         previewCanvas.getContext("2d").drawImage(canvas, 0, 0, previewCanvas.width, previewCanvas.height);
         var dataURL = previewCanvas.toDataURL();
         document.getElementById('preview').src = dataURL;
+
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        drawBackground();
+        drawPixels();
       };
 
       var onColorPickerChange = function(event) {
