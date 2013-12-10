@@ -11,6 +11,7 @@
       var layers = [];
       var zoom = 20;
       var previewCanvas;
+      var selectedTool = "pencil";
 
       var onLoad = function(event) {
         var canvas = document.getElementById("canvas");
@@ -59,6 +60,8 @@
             var layer = layers[i];
             for (var j = 0; j < layer.length; j ++) {
               var pixel = layer[j];
+              if (!pixel.alpha)
+                continue;
               context.fillStyle = "rgba(" + pixel.red + "," + pixel.green + "," + pixel.blue + "," + pixel.alpha + ")";
               context.fillRect((j % width) * zoom, Math.floor(j / width) * zoom, zoom, zoom);
             }
@@ -146,23 +149,28 @@
           y = Math.floor(y / zoom);
         }
         var pixel = layers[0][x + y * width];
-        pixel.red = selectedColor.red;
-        pixel.green = selectedColor.green;
-        pixel.blue = selectedColor.blue;
-        pixel.alpha = selectedColor.alpha;
+        if (selectedTool == "pencil") {
+          pixel.red = selectedColor.red;
+          pixel.green = selectedColor.green;
+          pixel.blue = selectedColor.blue;
+          pixel.alpha = selectedColor.alpha;
 
-        // add new color to colors (colorPalette)
-        var colorFound = false;
-        for (var i = 0; i < colors.length; i ++) {
-          var paletteColor = colors[i];
-          if (selectedColor.red == paletteColor.red &&
-            selectedColor.green == paletteColor.green &&
-            selectedColor.blue == paletteColor.blue)
-            colorFound = true;
+          // add new color to colors (colorPalette)
+          var colorFound = false;
+          for (var i = 0; i < colors.length; i ++) {
+            var paletteColor = colors[i];
+            if (selectedColor.red == paletteColor.red &&
+              selectedColor.green == paletteColor.green &&
+              selectedColor.blue == paletteColor.blue)
+              colorFound = true;
+          }
+          if (!colorFound) {
+            colors.push(selectedColor);
+            updateColorPalette();
+          }
         }
-        if (!colorFound) {
-          colors.push(selectedColor);
-          updateColorPalette();
+        else if (selectedTool == "eraser") {
+          pixel.alpha = 0;
         }
 
         render();
@@ -250,6 +258,10 @@
         previewCanvas.width = width;
         previewCanvas.height = height;
         render();
+      };
+
+      var onToolSelectChange = function(event) {
+        selectedTool = document.getElementById("toolSelect").value;
       };
 
       var rgbToHsl = function(r, g, b) {
@@ -348,6 +360,10 @@
         <input id="colorInput" onchange="onColorPickerChange(event)" type="color" value="#000000"></input>
         <canvas id="colorLuminosity" onmousedown="onColorLuminosityMouseDown(event)" width="20" height="20"></canvas>
         <canvas id="colorPalette" onmousedown="onColorPaletteMouseDown(event)"></canvas>
+        <select id="toolSelect" onchange="onToolSelectChange(event)">
+          <option value="pencil">Pencil</option>
+          <option value="eraser">Eraser</option>
+        </select>
       </div>
       <div>
         <input id="alphaInput" type="number" value="1"></input>
