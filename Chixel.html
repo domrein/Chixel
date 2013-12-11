@@ -71,7 +71,9 @@
         context.clearRect(0, 0, canvas.width, canvas.height);
         drawPixels();
         // update preview
-        previewCanvas.getContext("2d").drawImage(canvas, 0, 0, previewCanvas.width, previewCanvas.height);
+        previewContext = previewCanvas.getContext("2d");
+        previewContext.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+        previewContext.drawImage(canvas, 0, 0, previewCanvas.width, previewCanvas.height);
         var dataURL = previewCanvas.toDataURL();
         document.getElementById('preview').src = dataURL;
 
