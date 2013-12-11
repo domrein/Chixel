@@ -2,6 +2,23 @@
 <html>
   <head>
     <title>Chixel - For Makin' Pixels</title>
+    <style type="text/css">
+    .separator {
+      background-color: #000000;
+      margin: 5px;
+      width: 220px;
+      height: 2px;
+    }
+
+    .numberInput {
+      width: 35px;
+    }
+
+    h4 {
+      padding: 0;
+      margin: 0;
+    }
+    </style>
     <script type="text/javascript">
       var selectedColor = {red:0, green:0, blue:0, alpha:1};
       var colors = [];
@@ -387,26 +404,36 @@
   <body onload="onLoad(event)">
     <span id="controls">
       <div>
+        <h4>Color</h4>
         <input id="colorInput" onchange="onColorPickerChange(event)" type="color" value="#000000"></input>
         <canvas id="colorLuminosity" onmousedown="onColorLuminosityMouseDown(event)" width="20" height="20"></canvas>
+        <div class="separator"></div>
+        <h4>Palette</h4>
         <canvas id="colorPalette" onmousedown="onColorPaletteMouseDown(event)"></canvas>
+        <div class="separator"></div>
+        <h4>Tool</h4>
         <select id="toolSelect" onchange="onToolSelectChange(event)">
           <option value="pencil">Pencil</option>
           <option value="eraser">Eraser</option>
         </select>
+        <div class="separator"></div>
       </div>
       <div>
-        <input id="alphaInput" type="number" value="1"></input>
-        <input id="widthInput" type="number" value="5" onchange="onImageResize()"></input>
-        <input id="heightInput" type="number" value="5" onchange="onImageResize()"></input>
+        <!-- <input id="alphaInput" type="number" value="1"></input> -->
+        <h4>Width/Height</h4>
+        <input id="widthInput" class="numberInput" type="number" value="5" onchange="onImageResize()"></input>
+        <input id="heightInput" class="numberInput" type="number" value="5" onchange="onImageResize()"></input>
+        <div class="separator"></div>
+      </div>
+      <div>
+        <h4>JSON</h4>
+        <textarea id="jsonDisplay" cols="30" rows="8"></textarea>
+        <div class="separator"></div>
       </div>
     </span>
     <div>
       <canvas id="canvas" style="border-color: #000000;border-width: 2px;border-style: solid;user-select: none;" onmousedown="onCanvasMouseDown(event)"></canvas>
       <image id="preview"></image>
-    </div>
-    <div>
-      <textarea id="jsonDisplay" cols="55" rows="5"></textarea>
     </div>
   </body>
 </html>
