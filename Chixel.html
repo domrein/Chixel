@@ -31,7 +31,7 @@
         var layer = [];
         for (var i = 0; i < height; i++) {
           for (var j = 0; j < width; j ++) {
-            layer.push({red:0, green:0, blue:0, alpha:0});
+            layer.push(-1);
           }
         }
         layers.push(layer);
@@ -62,9 +62,9 @@
             var layer = layers[i];
             for (var j = 0; j < layer.length; j ++) {
               var pixel = layer[j];
-              if (!pixel.alpha)
+              if (pixel == -1)
                 continue;
-              context.fillStyle = "rgba(" + pixel.red + "," + pixel.green + "," + pixel.blue + "," + pixel.alpha + ")";
+              context.fillStyle = "rgba(" + colors[pixel].red + "," + colors[pixel].green + "," + colors[pixel].blue + "," + colors[pixel].alpha + ")";
               context.fillRect((j % width) * zoom, Math.floor(j / width) * zoom, zoom, zoom);
             }
           }
@@ -172,32 +172,38 @@
           x = Math.floor(x / zoom);
           y = Math.floor(y / zoom);
         }
-        var pixel = layers[0][x + y * width];
         if (selectedTool == "pencil") {
-          pixel.red = selectedColor.red;
-          pixel.green = selectedColor.green;
-          pixel.blue = selectedColor.blue;
-          pixel.alpha = selectedColor.alpha;
-
           // add new color to colors (colorPalette)
-          var colorFound = false;
+          var colorIndex = -1;
           for (var i = 0; i < colors.length; i ++) {
             var paletteColor = colors[i];
             if (selectedColor.red == paletteColor.red &&
               selectedColor.green == paletteColor.green &&
               selectedColor.blue == paletteColor.blue)
-              colorFound = true;
+              colorIndex = i;
           }
-          if (!colorFound) {
-            colors.push(selectedColor);
+          if (colorIndex == -1) {
+            colorIndex = colors.push(selectedColor) - 1;
             updateColorPalette();
           }
+
+          layers[0][x + y * width] = colorIndex;
         }
         else if (selectedTool == "eraser") {
-          pixel.alpha = 0;
+          layers[0][x + y * width] = -1;
         }
 
         render();
+
+        var hexColors = [];
+        for (i = 0; i < colors.length; i ++)
+          hexColors.push(intToHex(colors[i].red, 2) + intToHex(colors[i].green, 2) + intToHex(colors[i].blue, 2));
+        var displayJsonText = JSON.stringify({
+          colors: hexColors,
+          width: width,
+          pixels: layers[0],
+        });
+        document.getElementById("jsonDisplay").innerText = displayJsonText;
       };
 
       var onColorLuminosityMouseDown = function(event) {
@@ -398,6 +404,9 @@
     <div>
       <canvas id="canvas" style="border-color: #000000;border-width: 2px;border-style: solid;user-select: none;" onmousedown="onCanvasMouseDown(event)"></canvas>
       <image id="preview"></image>
+    </div>
+    <div>
+      <textarea id="jsonDisplay" cols="55" rows="5"></textarea>
     </div>
   </body>
 </html>
