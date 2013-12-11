@@ -89,11 +89,14 @@
         var colorInput = document.getElementById("colorInput");
         var color = colorInput.value.substr(1);
 
+        var rgb = [parseInt(color[0] + color[1], 16), parseInt(color[2] + color[3], 16), parseInt(color[4] + color[5], 16)];
+        selectedColor = {red: rgb[0], green: rgb[1], blue: rgb[2], alpha: 1};
+        updateLuminosity();
         // force color to nearest luminosity
         var lightnesses = [];
         for (var i = 0; i <= luminosityCount - 1; i ++)
           lightnesses.push(i / (luminosityCount - 1));
-        var hsl = rgbToHsl(parseInt(color[0] + color[1], 16), parseInt(color[2] + color[3], 16), parseInt(color[4] + color[5], 16));
+        var hsl = rgbToHsl(rgb[0], rgb[1], rgb[2]);
         var hslDist = 1;
         var closestIndex = 0;
         for (i = 0; i < lightnesses.length; i ++) {
@@ -103,10 +106,9 @@
             closestIndex = i;
           }
         }
-        hsl[2] = lightnesses[closestIndex];
-        
-        var rgb = hslToRgb(hsl[0], hsl[1], hsl[2]);
-        updateSelectedColor(rgb[0], rgb[1], rgb[2]);
+        var closestColor = luminosityColors[closestIndex];
+        updateSelectedColor(closestColor.red, closestColor.green, closestColor.blue);
+        updateLuminosity();
       };
 
       var onCanvasMouseDown = function(event) {
@@ -154,7 +156,6 @@
         var hexColor = intToHex(selectedColor.red, 2) + intToHex(selectedColor.green, 2) + intToHex(selectedColor.blue, 2);
         console.log(hexColor);
         colorInput.value = "#" + hexColor;
-        updateLuminosity();
       };
 
       var intToHex = function(int, length) {
@@ -202,7 +203,7 @@
       var onColorLuminosityMouseDown = function(event) {
         var colorIndex = Math.floor(event.offsetX / colorSize);
         updateSelectedColor(luminosityColors[colorIndex].red, luminosityColors[colorIndex].green, luminosityColors[colorIndex].blue);
-        updateLuminosity();
+        // updateLuminosity();
       };
 
       var updateLuminosity = function(event) {
