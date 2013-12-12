@@ -284,12 +284,12 @@
                 layer.splice(0, width - usableWidth);
               newLayer = newLayer.concat(spliced);
               for (var k = 0; k < deltaWidth; k ++) {
-                newLayer.push({red:0, green:0, blue:0, alpha:0});
+                newLayer.push(-1);
               }
             }
             else {
               for (k = 0; k < newWidth; k ++)
-               newLayer.push({red:0, green:0, blue:0, alpha:0}); 
+               newLayer.push(-1); 
             }
           }
           newLayers.push(newLayer);
