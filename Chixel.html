@@ -36,37 +36,123 @@
       var colors = [];
       var luminosityColors = [];
       var luminosityCount = 8;
-      var width = 5;
-      var height = 5;
+      
+      // width/height (in pixels) of entire drawing area
+      var canvasWidth = 0;
+      var canasHeight = 0;
+
+      // width/height/x/y of exportable image area
+      var frameWidth = 8;
+      var frameHeight = 8;
+      var frameX = 0;
+      var frameY = 0;
+      
       var layers = [];
       var zoom = 20;
       var previewCanvas;
       var selectedTool = "pencil";
 
       var onLoad = function(event) {
-        var canvas = document.getElementById("canvas");
-        canvas.width = width * zoom;
-        canvas.height = height * zoom;
-        addLayer();
         previewCanvas = document.createElement("canvas");
-        previewCanvas.width = width;
-        previewCanvas.height = height;
+        resizeCanvas();
+        addLayer();
         updateColorPalette();
         updateLuminosity();
         previewImage = document.getElementById("preview");
-        previewImage.width = width;
-        previewImage.height = height;
+        previewImage.width = frameWidth;
+        previewImage.height = frameWidth;
         render();
       };
 
       var addLayer = function() {
         var layer = [];
-        for (var i = 0; i < height; i++) {
-          for (var j = 0; j < width; j ++) {
+        for (var i = 0; i < canvasHeight; i++) {
+          for (var j = 0; j < canvasWidth; j ++) {
             layer.push(-1);
           }
         }
         layers.push(layer);
+      };
+
+      var resizeCanvas = function() {
+        var i, j, x, y, layer;
+        var drawingArea = document.getElementById("drawingArea");
+        var canvas = document.getElementById("canvas");
+        // find min width/height (size of rect with used pixels) and don't resize below that point
+        var lowestX = -1;
+        var lowestY = -1;
+        var highestX = -1;
+        var highestY = -1;
+        for (i = 0; i < layers.length; i ++) {
+          layer = layers[i];
+          for (j = 0; j < layer.length; j ++) {
+            if (layer[j] == -1)
+              continue;
+            x = j % canvasWidth;
+            y = Math.floor(j / canvasWidth);
+            if (lowestX == -1 || x < lowestX)
+              lowestX = x;
+            if (highestX == -1 || x > highestX)
+              highestX = x;
+            if (lowestY == -1 || y < lowestY)
+              lowestY = y;
+            if (highestY == -1 || y < highestY)
+              highestY = y;
+          }
+        }
+        var minWidth = highestX - lowestX;
+        var minHeight = highestY - lowestY;
+
+        // TODO: dynamically fetch -40 to account for padding
+        var newWidth = Math.floor((drawingArea.offsetWidth - 40) / zoom);
+        var newHeight = Math.floor(drawingArea.offsetHeight / zoom);
+        if (newWidth < minWidth)
+          newWidth = minWidth;
+        if (newHeight < minHeight)
+          newHeight = minHeight;
+        canvas.width = newWidth * zoom;
+        canvas.height = newHeight * zoom;
+        // TODO: center canvas in drawingArea (maybe do that in css?)
+
+        previewCanvas.width = frameWidth;
+        previewCanvas.height = frameHeight;
+
+        // resizeLayers
+        // if layers aren't the same size as the new ones, then resize'em
+        // try and put the guide in the center
+        var newFrameX = Math.round(newWidth / 2 - frameWidth / 2);
+        var newFrameY = Math.round(newHeight / 2 - frameHeight / 2);
+        var pixelDeltaX = newFrameX - frameX;
+        var pixelDeltaY = newFrameY - frameY;
+        // move pixels relative to frame
+        var newLayers = [];
+        for (i = 0; i < layers.length; i ++) {
+          var newLayer = [];
+          newLayers.push(newLayer);
+          for (j = 0; j < newWidth * newHeight; j ++) {
+            newLayer.push(-1);
+          }
+        }
+
+        // copy data from layers into newLayers
+        for (i = 0; i < layers.length; i ++) {
+          var layer = layers[i];
+          for (j = 0; j < layer.length; j ++) {
+            if (layer[j] == -1)
+              continue;
+            x = j % canvasWidth;
+            y = Math.floor(j / canvasWidth);
+            newLayers[i][x + pixelDeltaX + (y + pixelDeltaY) * newWidth] = layer[j];
+          }
+        }
+
+        layers = newLayers;
+        frameX = newFrameX;
+        frameY = newFrameY;
+        canvasWidth = newWidth;
+        canvasHeight = newHeight;
+
+        render();
       };
 
       var render = function() {
@@ -99,23 +185,28 @@
               if (pixel == -1)
                 continue;
               context.fillStyle = "rgba(" + colors[pixel].red + "," + colors[pixel].green + "," + colors[pixel].blue + "," + colors[pixel].alpha + ")";
-              context.fillRect((j % width) * zoom, Math.floor(j / width) * zoom, zoom, zoom);
+              context.fillRect((j % canvasWidth) * zoom, Math.floor(j / canvasWidth) * zoom, zoom, zoom);
             }
           }
         };
 
         context.clearRect(0, 0, canvas.width, canvas.height);
         drawPixels();
+
+        // TODO: fix update preview. Throwing some weird DOM error 
         // update preview
-        previewContext = previewCanvas.getContext("2d");
-        previewContext.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
-        previewContext.drawImage(canvas, 0, 0, previewCanvas.width, previewCanvas.height);
-        var dataURL = previewCanvas.toDataURL();
-        document.getElementById('preview').src = dataURL;
+        // previewContext = previewCanvas.getContext("2d");
+        // previewContext.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+        // previewContext.drawImage(canvas, 0, 0, previewCanvas.width, previewCanvas.height);
+        // var dataURL = previewCanvas.toDataURL();
+        // document.getElementById('preview').src = dataURL;
 
         context.clearRect(0, 0, canvas.width, canvas.height);
         drawBackground();
         drawPixels();
+        // draw frame box (alphaed dashed line with arrow handles to stretch it)
+        context.strokeStyle = "rgba(200, 200, 200, .5)";
+        context.strokeRect(frameX * zoom, frameY * zoom, frameWidth * zoom, frameHeight * zoom);
       };
 
       var onColorPickerChange = function(event) {
@@ -221,10 +312,10 @@
             updateColorPalette();
           }
 
-          layers[0][x + y * width] = colorIndex;
+          layers[0][x + y * canvasWidth] = colorIndex;
         }
         else if (selectedTool == "eraser") {
-          layers[0][x + y * width] = -1;
+          layers[0][x + y * canvasWidth] = -1;
         }
 
         render();
@@ -232,12 +323,14 @@
         var hexColors = [];
         for (i = 0; i < colors.length; i ++)
           hexColors.push(intToHex(colors[i].red, 2) + intToHex(colors[i].green, 2) + intToHex(colors[i].blue, 2));
-        var displayJsonText = JSON.stringify({
-          colors: hexColors,
-          width: width,
-          pixels: layers[0],
-        });
-        document.getElementById("jsonDisplay").innerText = displayJsonText;
+        
+        // TODO: fix json display by cropping out stuff outside frame
+        // var displayJsonText = JSON.stringify({
+        //   colors: hexColors,
+        //   width: width,
+        //   pixels: layers[0],
+        // });
+        // document.getElementById("jsonDisplay").innerText = displayJsonText;
       };
 
       var onColorLuminosityMouseDown = function(event) {
@@ -278,51 +371,52 @@
           context.fillStyle = "rgba(" + Math.round(color[0]) + "," + Math.round(color[1]) + "," + Math.round(color[2]) + ",1)";
           context.fillRect(i * colorSize, 0, colorSize, colorSize);
         }
-      }
-
-      var onImageResize = function() {
-        var newWidth = parseInt(document.getElementById("widthInput").value);
-        var newHeight = parseInt(document.getElementById("heightInput").value);
-        var newLayers = [];
-        var deltaWidth = newWidth - width;
-        var usableWidth = (width < newWidth) ? width : newWidth;
-        var deltaHeight = newHeight - height;
-        var usableHeight = (height < newHeight) ? height : newHeight;
-        
-        // take as many of the old width as we can
-        // then advance the old height and start from there
-        for (var i = 0; i < layers.length; i ++) {
-          var newLayer = [];
-          var layer = layers[i];
-          for (var j = 0; j < newHeight; j ++) {
-            if (j < height) {
-              var spliced = layer.splice(0, usableWidth);
-              if (usableWidth < width)
-                layer.splice(0, width - usableWidth);
-              newLayer = newLayer.concat(spliced);
-              for (var k = 0; k < deltaWidth; k ++) {
-                newLayer.push(-1);
-              }
-            }
-            else {
-              for (k = 0; k < newWidth; k ++)
-               newLayer.push(-1); 
-            }
-          }
-          newLayers.push(newLayer);
-        }
-
-        layers = newLayers;
-        width = newWidth;
-        height = newHeight;
-
-        var canvas = document.getElementById("canvas");
-        canvas.width = width * zoom;
-        canvas.height = height * zoom;
-        previewCanvas.width = width;
-        previewCanvas.height = height;
-        render();
       };
+
+      // TODO: implement image resizing within canvas resizing
+      // var onImageResize = function() {
+      //   var newWidth = parseInt(document.getElementById("widthInput").value);
+      //   var newHeight = parseInt(document.getElementById("heightInput").value);
+      //   var newLayers = [];
+      //   var deltaWidth = newWidth - width;
+      //   var usableWidth = (width < newWidth) ? width : newWidth;
+      //   var deltaHeight = newHeight - height;
+      //   var usableHeight = (height < newHeight) ? height : newHeight;
+        
+      //   // take as many of the old width as we can
+      //   // then advance the old height and start from there
+      //   for (var i = 0; i < layers.length; i ++) {
+      //     var newLayer = [];
+      //     var layer = layers[i];
+      //     for (var j = 0; j < newHeight; j ++) {
+      //       if (j < height) {
+      //         var spliced = layer.splice(0, usableWidth);
+      //         if (usableWidth < width)
+      //           layer.splice(0, width - usableWidth);
+      //         newLayer = newLayer.concat(spliced);
+      //         for (var k = 0; k < deltaWidth; k ++) {
+      //           newLayer.push(-1);
+      //         }
+      //       }
+      //       else {
+      //         for (k = 0; k < newWidth; k ++)
+      //          newLayer.push(-1); 
+      //       }
+      //     }
+      //     newLayers.push(newLayer);
+      //   }
+
+      //   layers = newLayers;
+      //   width = newWidth;
+      //   height = newHeight;
+
+      //   var canvas = document.getElementById("canvas");
+      //   canvas.width = width * zoom;
+      //   canvas.height = height * zoom;
+      //   previewCanvas.width = width;
+      //   previewCanvas.height = height;
+      //   render();
+      // };
 
       var onToolSelectChange = function(event) {
         selectedTool = document.getElementById("toolSelect").value;
@@ -423,7 +517,7 @@
       }
     </script>
   </head>
-  <body onload="onLoad(event)">
+  <body onload="onLoad(event)" onresize="resizeCanvas(event)">
     <div style="display:flex; flex-direction:row;">
       <div id="controls" class="sidebar">
         <div>
@@ -458,7 +552,7 @@
           <div class="separator"></div>
         </div>
       </div>
-      <div class="drawingArea">
+      <div id="drawingArea" class="drawingArea">
         <canvas id="canvas" style="border-color:#000000; border-width:2px; border-style:solid; user-select:none; " onmousedown="onCanvasMouseDown(event)"></canvas>
       </div>
       <div class="sidebar">
