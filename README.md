@@ -1,4 +1,4 @@
-Chixel
+Chixel - For Makin' Pixels
 ======
 
-Chixel - For makin' pixels
+Chixel is a free, open source and web based pixel art editor.
