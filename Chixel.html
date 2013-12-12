@@ -18,12 +18,24 @@
       padding: 0;
       margin: 0;
     }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      min-width: 225px;
+    }
+
+    .drawingArea {
+       width: 100%;
+       padding-left: 20px;
+       padding-right: 20px;
+    }
     </style>
     <script type="text/javascript">
       var selectedColor = {red:0, green:0, blue:0, alpha:1};
       var colors = [];
       var luminosityColors = [];
-      var luminosityCount = 5;
+      var luminosityCount = 8;
       var width = 5;
       var height = 5;
       var layers = [];
@@ -41,6 +53,9 @@
         previewCanvas.height = height;
         updateColorPalette();
         updateLuminosity();
+        previewImage = document.getElementById("preview");
+        previewImage.width = width;
+        previewImage.height = height;
         render();
       };
 
@@ -62,7 +77,9 @@
           context.fillStyle = "#ECECEC";
           var lineWidth = 8;
           var lineSpacing = 20 + lineWidth;
-          for (i = 1; i < canvas.width * 2; i += lineSpacing) {
+          var canvasSize = (canvas.width >= canvas.height) ? canvas.width * 2 : canvas.height * 2;
+          // for (i = 1; i < canvas.width * 2; i += lineSpacing) {
+          for (i = 1; i < canvasSize; i += lineSpacing) {
             context.beginPath();
             context.moveTo(i, 0);
             context.lineTo(0, i);
@@ -311,6 +328,11 @@
         selectedTool = document.getElementById("toolSelect").value;
       };
 
+      var onZoomChange = function(event) {
+        zoom = parseInt(document.getElementById("zoomInput").value);
+        render();
+      };
+
       var rgbToHsl = function(r, g, b) {
         r /= 255, g /= 255, b /= 255;
         var max = Math.max(r, g, b), min = Math.min(r, g, b);
@@ -403,7 +425,7 @@
   </head>
   <body onload="onLoad(event)">
     <div style="display:flex; flex-direction:row;">
-      <div id="controls" style="display:flex; flex-direction: column;">
+      <div id="controls" class="sidebar">
         <div>
           <h4>Color</h4>
           <input id="colorInput" onchange="onColorPickerChange(event)" type="color" value="#000000"></input>
@@ -420,6 +442,10 @@
           <div class="separator"></div>
         </div>
         <div>
+          <h4>Zoom</h4>
+          <input id="zoomInput" class="numberInput" type="number" value="20" onchange="onZoomChange()"></input>
+        </div>
+        <div>
           <!-- <input id="alphaInput" type="number" value="1"></input> -->
           <h4>Width/Height</h4>
           <input id="widthInput" class="numberInput" type="number" value="5" onchange="onImageResize()"></input>
@@ -432,9 +458,17 @@
           <div class="separator"></div>
         </div>
       </div>
-      <div>
+      <div class="drawingArea">
         <canvas id="canvas" style="border-color:#000000; border-width:2px; border-style:solid; user-select:none; " onmousedown="onCanvasMouseDown(event)"></canvas>
+      </div>
+      <div class="sidebar">
+        <h4>Preview</h4>
         <image id="preview"></image>
+        <div class="separator"></div>
+        <h4>Frames</h4>
+        <div class="separator"></div>
+        <h4>Layers</h4>
+        <div class="separator"></div>
       </div>
     </div>
   </body>
