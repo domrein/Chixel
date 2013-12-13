@@ -51,16 +51,20 @@
       var zoom = 20;
       var previewCanvas;
       var selectedTool = "pencil";
+      var effectsCanvas;
+      var state = "none";
 
       var onLoad = function(event) {
         previewCanvas = document.createElement("canvas");
+        effectsCanvas = document.createElement("canvas");
+        // document.body.appendChild(previewCanvas);
         resizeCanvas();
         addLayer();
         updateColorPalette();
         updateLuminosity();
         previewImage = document.getElementById("preview");
         previewImage.width = frameWidth;
-        previewImage.height = frameWidth;
+        previewImage.height = frameHeight;
         render();
       };
 
@@ -100,8 +104,8 @@
               highestY = y;
           }
         }
-        var minWidth = highestX - lowestX;
-        var minHeight = highestY - lowestY;
+        var minWidth = highestX - lowestX + 1;
+        var minHeight = highestY - lowestY + 1;
 
         // TODO: dynamically fetch -40 to account for padding
         var newWidth = Math.floor((drawingArea.offsetWidth - 40) / zoom);
@@ -112,10 +116,13 @@
           newHeight = minHeight;
         canvas.width = newWidth * zoom;
         canvas.height = newHeight * zoom;
+        effectsCanvas.width = newWidth * zoom;
+        effectsCanvas.height = newHeight * zoom;
         // TODO: center canvas in drawingArea (maybe do that in css?)
 
         previewCanvas.width = frameWidth;
         previewCanvas.height = frameHeight;
+
 
         // resizeLayers
         // if layers aren't the same size as the new ones, then resize'em
@@ -195,18 +202,90 @@
 
         // TODO: fix update preview. Throwing some weird DOM error 
         // update preview
-        // previewContext = previewCanvas.getContext("2d");
-        // previewContext.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
-        // previewContext.drawImage(canvas, 0, 0, previewCanvas.width, previewCanvas.height);
-        // var dataURL = previewCanvas.toDataURL();
-        // document.getElementById('preview').src = dataURL;
+        previewContext = previewCanvas.getContext("2d");
+        previewContext.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+        previewContext.drawImage(canvas, frameX * zoom, frameY * zoom, frameWidth * zoom, frameHeight * zoom, 0, 0, previewCanvas.width, previewCanvas.height);
+        var dataURL = previewCanvas.toDataURL();
+        document.getElementById('preview').src = dataURL;
 
         context.clearRect(0, 0, canvas.width, canvas.height);
         drawBackground();
         drawPixels();
+        
         // draw frame box (alphaed dashed line with arrow handles to stretch it)
-        context.strokeStyle = "rgba(200, 200, 200, .5)";
-        context.strokeRect(frameX * zoom, frameY * zoom, frameWidth * zoom, frameHeight * zoom);
+        var effectsContext = effectsCanvas.getContext("2d");
+        effectsContext.clearRect(0, 0, effectsCanvas.width, effectsCanvas.height);
+        effectsContext.strokeStyle = effectsContext.fillStyle = "rgba(200, 200, 200, .8)";
+        effectsContext.lineWidth = 3;
+        effectsContext.setLineDash([6]);
+        effectsContext.strokeRect(frameX * zoom, frameY * zoom, frameWidth * zoom, frameHeight * zoom);
+        effectsContext.setLineDash([]);
+
+        var breakSize = 18;
+        effectsContext.clearRect(0, frameY * zoom + frameHeight * zoom / 2 - breakSize / 2, effectsCanvas.width, breakSize);
+        effectsContext.clearRect(frameX * zoom + frameWidth * zoom / 2 - breakSize / 2, 0, breakSize, effectsCanvas.height);
+
+        // draw handles
+        var drawHandle = function(facing) {
+          effectsContext.save();
+          effectsContext.translate(frameX * zoom + frameWidth * zoom / 2, frameY * zoom + frameHeight * zoom / 2);
+          if (facing == "left" || facing == "right")
+            var size = frameWidth * zoom / 2;
+          else if (facing == "top" || facing == "bottom")
+            size = frameHeight * zoom / 2;
+          switch (facing) {
+            case "top": var rotation = Math.PI; break;
+            case "bottom": var rotation = 0; break;
+            case "left": var rotation = Math.PI * 0.5; break;
+            case "right": var rotation = Math.PI * 1.5; break;
+          }
+          effectsContext.rotate(rotation);
+          
+          var handleSize = 5;
+          effectsContext.beginPath();
+          effectsContext.moveTo(0, size);
+          effectsContext.arc(0, size, handleSize / 2, 0, Math.PI * 2);
+          effectsContext.closePath();
+          effectsContext.stroke();
+          effectsContext.fill();
+
+          effectsContext.restore();
+        };
+        drawHandle("top");
+        drawHandle("bottom");
+        drawHandle("left");
+        drawHandle("right");
+
+        context.drawImage(effectsCanvas, 0, 0);
+      };
+
+      var checkHandleCollision = function(x, y) {
+        var checkRectCollision = function(x, y, rectX, rectY, rectWidth, rectHeight) {
+          var colliding = true;
+          if (x < rectX - rectWidth / 2) colliding = false;
+          if (x > rectX + rectWidth / 2) colliding = false;
+          if (y < rectY - rectHeight / 2) colliding = false;
+          if (y > rectY + rectHeight / 2) colliding = false;
+
+          return colliding;
+        };
+
+        // TODO: change this so that we don't have handleSize defined twice
+        var handleSize = 10;
+        // top
+        if (checkRectCollision(x, y, frameX * zoom + frameWidth * zoom / 2, frameY * zoom, handleSize, handleSize))
+          return "top";
+        // bottom
+        else if (checkRectCollision(x, y, frameX * zoom + frameWidth * zoom / 2, frameY * zoom + frameHeight * zoom, handleSize, handleSize))
+          return "bottom";
+        // left
+        else if (checkRectCollision(x, y, frameX * zoom, frameY * zoom + frameHeight * zoom / 2, handleSize, handleSize))
+          return "left";
+        // right
+        else if (checkRectCollision(x, y, frameX * zoom + frameWidth * zoom, frameY * zoom + frameHeight * zoom / 2, handleSize, handleSize))
+          return "right";
+
+        return false;
       };
 
       var onColorPickerChange = function(event) {
@@ -237,18 +316,90 @@
       };
 
       var onCanvasMouseDown = function(event) {
-        draw(event.offsetX, event.offsetY, true);
+        // if we're above a handle, then resize on drag
+        var handleCollision = checkHandleCollision(event.offsetX, event.offsetY);
+        if (handleCollision) {
+          if (handleCollision == "top")
+            state = "resizeTop";
+          else if (handleCollision == "bottom")
+            state = "resizeBottom";
+          else if (handleCollision == "left")
+            state = "resizeLeft";
+          else if (handleCollision == "right")
+            state = "resizeRight";
+        }
+        else {
+          state = "draw";
+          draw(event.offsetX, event.offsetY, true);
+        }
+
         window.addEventListener("mouseup", onWindowMouseUp, true);
-        document.getElementById("canvas").addEventListener("mousemove", onCanvasMouseMove, true);
       };
 
       var onCanvasMouseMove = function(event) {
-        draw(event.offsetX, event.offsetY, true);
+        var handleCollision = checkHandleCollision(event.offsetX, event.offsetY);
+        if (state == "draw")
+          draw(event.offsetX, event.offsetY, true);
+        else if (state == "resizeTop" || state == "resizeBottom") {
+          if (state == "resizeTop")
+            var handleY = frameY * zoom;
+          else if (state == "resizeBottom")
+            handleY = frameY * zoom + frameHeight * zoom;
+          var yDist = Math.round((event.offsetY - handleY) / zoom);
+          if (yDist) {
+            if (state == "resizeTop" && frameHeight - yDist >= 1) {
+              frameY += yDist;
+              frameHeight += -yDist;
+            }
+            else if (state == "resizeBottom" && frameHeight + yDist >= 1) {
+              frameHeight += yDist;
+            }
+            frameResized();
+            render();
+          }
+        }
+        else if (state == "resizeLeft" || state == "resizeRight") {
+          if (state == "resizeLeft")
+            var handleX = frameX * zoom;
+          else if (state == "resizeRight")
+            handleX = frameX * zoom + frameWidth * zoom;
+          var xDist = Math.round((event.offsetX - handleX) / zoom);
+          if (xDist) {
+            if (state == "resizeLeft" && frameWidth - xDist >= 1) {
+              frameX += xDist;
+              frameWidth += -xDist;
+            }
+            else if (state == "resizeRight" && frameWidth + xDist >= 1) {
+              frameWidth += xDist;
+            }
+            frameResized();
+            render();
+          }
+        }
+        else if (state == "none" && handleCollision) {
+          if (handleCollision == "top" || handleCollision == "bottom")
+            document.body.style.cursor = "ns-resize";
+          else if (handleCollision == "left" || handleCollision == "right")
+            document.body.style.cursor = "ew-resize";
+        }
+        else if (document.body.style.cursor != "auto")
+            document.body.style.cursor = "auto";
+      };
+
+      var frameResized = function() {
+        previewCanvas.width = frameWidth;
+        previewCanvas.height = frameHeight;
+        previewImage = document.getElementById("preview");
+        previewImage.width = frameWidth;
+        previewImage.height = frameHeight;
+
+        document.getElementById("widthInput").value = frameWidth;
+        document.getElementById("heightInput").value = frameHeight;
       };
 
       var onWindowMouseUp = function(event) {
         window.removeEventListener("mouseup", onWindowMouseUp, true);
-        document.getElementById("canvas").removeEventListener("mousemove", onCanvasMouseMove, true);
+        state = "none";
       };
 
       var colorSize = 20;
@@ -373,51 +524,6 @@
         }
       };
 
-      // TODO: implement image resizing within canvas resizing
-      // var onImageResize = function() {
-      //   var newWidth = parseInt(document.getElementById("widthInput").value);
-      //   var newHeight = parseInt(document.getElementById("heightInput").value);
-      //   var newLayers = [];
-      //   var deltaWidth = newWidth - width;
-      //   var usableWidth = (width < newWidth) ? width : newWidth;
-      //   var deltaHeight = newHeight - height;
-      //   var usableHeight = (height < newHeight) ? height : newHeight;
-        
-      //   // take as many of the old width as we can
-      //   // then advance the old height and start from there
-      //   for (var i = 0; i < layers.length; i ++) {
-      //     var newLayer = [];
-      //     var layer = layers[i];
-      //     for (var j = 0; j < newHeight; j ++) {
-      //       if (j < height) {
-      //         var spliced = layer.splice(0, usableWidth);
-      //         if (usableWidth < width)
-      //           layer.splice(0, width - usableWidth);
-      //         newLayer = newLayer.concat(spliced);
-      //         for (var k = 0; k < deltaWidth; k ++) {
-      //           newLayer.push(-1);
-      //         }
-      //       }
-      //       else {
-      //         for (k = 0; k < newWidth; k ++)
-      //          newLayer.push(-1); 
-      //       }
-      //     }
-      //     newLayers.push(newLayer);
-      //   }
-
-      //   layers = newLayers;
-      //   width = newWidth;
-      //   height = newHeight;
-
-      //   var canvas = document.getElementById("canvas");
-      //   canvas.width = width * zoom;
-      //   canvas.height = height * zoom;
-      //   previewCanvas.width = width;
-      //   previewCanvas.height = height;
-      //   render();
-      // };
-
       var onToolSelectChange = function(event) {
         selectedTool = document.getElementById("toolSelect").value;
       };
@@ -472,49 +578,6 @@
 
         return [r * 255, g * 255, b * 255];
       }
-
-      var rgbToHsv = function(r, g, b) {
-        r = r/255, g = g/255, b = b/255;
-        var max = Math.max(r, g, b), min = Math.min(r, g, b);
-        var h, s, v = max;
-
-        var d = max - min;
-        s = max == 0 ? 0 : d / max;
-
-        if(max == min){
-            h = 0; // achromatic
-        }else{
-            switch(max){
-                case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-                case g: h = (b - r) / d + 2; break;
-                case b: h = (r - g) / d + 4; break;
-            }
-            h /= 6;
-        }
-
-        return [h, s, v];
-      }
-
-      var hsvToRgb = function(h, s, v) {
-        var r, g, b;
-
-        var i = Math.floor(h * 6);
-        var f = h * 6 - i;
-        var p = v * (1 - s);
-        var q = v * (1 - f * s);
-        var t = v * (1 - (1 - f) * s);
-
-        switch(i % 6) {
-          case 0: r = v, g = t, b = p; break;
-          case 1: r = q, g = v, b = p; break;
-          case 2: r = p, g = v, b = t; break;
-          case 3: r = p, g = q, b = v; break;
-          case 4: r = t, g = p, b = v; break;
-          case 5: r = v, g = p, b = q; break;
-        }
-
-        return [r * 255, g * 255, b * 255];
-      }
     </script>
   </head>
   <body onload="onLoad(event)" onresize="resizeCanvas(event)">
@@ -553,7 +616,7 @@
         </div>
       </div>
       <div id="drawingArea" class="drawingArea">
-        <canvas id="canvas" style="border-color:#000000; border-width:2px; border-style:solid; user-select:none; " onmousedown="onCanvasMouseDown(event)"></canvas>
+        <canvas id="canvas" style="border-color:#000000; border-width:2px; border-style:solid; user-select:none; " onmousedown="onCanvasMouseDown(event)" onmousemove="onCanvasMouseMove(event)"></canvas>
       </div>
       <div class="sidebar">
         <h4>Preview</h4>
