@@ -356,6 +356,7 @@
             }
             frameResized();
             render();
+            updateFrameJson();
           }
         }
         else if (state == "resizeLeft" || state == "resizeRight") {
@@ -374,6 +375,7 @@
             }
             frameResized();
             render();
+            updateFrameJson();
           }
         }
         else if (state == "none" && handleCollision) {
@@ -470,18 +472,26 @@
         }
 
         render();
+        updateFrameJson();
+      };
 
+      var updateFrameJson = function() {
         var hexColors = [];
         for (i = 0; i < colors.length; i ++)
           hexColors.push(intToHex(colors[i].red, 2) + intToHex(colors[i].green, 2) + intToHex(colors[i].blue, 2));
-        
-        // TODO: fix json display by cropping out stuff outside frame
-        // var displayJsonText = JSON.stringify({
-        //   colors: hexColors,
-        //   width: width,
-        //   pixels: layers[0],
-        // });
-        // document.getElementById("jsonDisplay").innerText = displayJsonText;
+        var pixelsInFrame = [];
+        for (i = 0; i < frameHeight; i ++) {
+          for (j = 0; j < frameWidth; j ++) {
+            pixelsInFrame.push(layers[0][frameX + j + frameY * canvasWidth + i * canvasWidth]);
+          }
+        }
+        // TODO: fix json display by cropping out stuff outside frame (have a separate json for the project)
+        var displayJsonText = JSON.stringify({
+          colors: hexColors,
+          width: frameWidth,
+          pixels: pixelsInFrame,
+        });
+        document.getElementById("jsonDisplay").value = displayJsonText;
       };
 
       var onColorLuminosityMouseDown = function(event) {
@@ -531,6 +541,50 @@
       var onZoomChange = function(event) {
         zoom = parseInt(document.getElementById("zoomInput").value);
         render();
+      };
+
+      var onJsonDisplayChange = function(event) {
+        // var displayJsonText = JSON.stringify({
+        //   colors: hexColors,
+        //   width: frameWidth,
+        //   pixels: pixelsInFrame,
+        // });
+        var jsonText = document.getElementById("jsonDisplay").value;
+        try {
+          var json = JSON.parse(jsonText);
+          var validJson = true;
+          if (!Array.isArray(json.colors))
+            validJson = false;
+          if (!Array.isArray(json.pixels))
+            validJson = false;
+          if (isNaN(parseInt(json.width)))
+            validJson = false;
+          if (validJson && (json.pixels.length / parseInt(json.width)) % 1 !== 0)
+            validJson = false;
+          // TODO: additional checking to make sure contents of colors and pixels are valid
+          // populate controls with data from json
+          colors = [];
+          for (i = 0; i < json.colors.length; i ++) {
+            var color = json.colors[i];
+            var rgb = [parseInt(color[0] + color[1], 16), parseInt(color[2] + color[3], 16), parseInt(color[4] + color[5], 16)];
+            colors.push({red: rgb[0], green: rgb[1], blue: rgb[2], alpha: 1});
+          }
+          updateColorPalette();
+          
+          layers = [];
+          addLayer();
+          frameWidth = parseInt(json.width);
+          frameHeight = json.pixels.length / frameWidth;
+          frameResized();
+          for (var i = 0; i < frameHeight; i ++) {
+            for (var j = 0; j < frameWidth; j ++) {
+              layers[0][frameX + j + frameY * canvasWidth + i * canvasWidth] = json.pixels[j + i * frameWidth];
+            }
+          }
+          render();
+        }
+        catch (error) {
+        }
       };
 
       var rgbToHsl = function(r, g, b) {
@@ -611,7 +665,7 @@
         </div>
         <div>
           <h4>JSON</h4>
-          <textarea id="jsonDisplay" cols="30" rows="8"></textarea>
+          <textarea id="jsonDisplay" cols="30" rows="8" onkeyup="onJsonDisplayChange(event)"></textarea>
           <div class="separator"></div>
         </div>
       </div>
