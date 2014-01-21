@@ -30,8 +30,24 @@
        padding-left: 20px;
        padding-right: 20px;
     }
+
+    .layerDiv {
+
+    }
+
+    .clickableSpan {
+      display: inline-block;
+      width: 80%;
+      height: 30px;
+      background-color: #00FF00;
+    }
+
+    .selected {
+      background-color: LightSkyBlue;
+    }
     </style>
     <script type="text/javascript">
+      "use strict";
       var selectedColor = {red:0, green:0, blue:0, alpha:1};
       var colors = [];
       var luminosityColors = [];
@@ -39,7 +55,7 @@
       
       // width/height (in pixels) of entire drawing area
       var canvasWidth = 0;
-      var canasHeight = 0;
+      var canvasHeight = 0;
 
       // width/height/x/y of exportable image area
       var frameWidth = 8;
@@ -48,11 +64,19 @@
       var frameY = 0;
       
       var layers = [];
+      var layerDivs = [];
+      var layerIdCounter = 0; // TODO: this should start at hightest id + 1
+      var selectedLayer = null;
+
       var zoom = 20;
       var previewCanvas;
-      var selectedTool = "pencil";
+      var selectedTool = "pixeler";
       var effectsCanvas;
       var state = "none";
+
+      // data for mover tool
+      var moverX = 0;
+      var moverY = 0;
 
       var onLoad = function(event) {
         previewCanvas = document.createElement("canvas");
@@ -62,48 +86,76 @@
         addLayer();
         updateColorPalette();
         updateLuminosity();
-        previewImage = document.getElementById("preview");
+        var previewImage = document.getElementById("preview");
         previewImage.width = frameWidth;
         previewImage.height = frameHeight;
         render();
       };
 
       var addLayer = function() {
-        var layer = [];
-        for (var i = 0; i < canvasHeight; i++) {
-          for (var j = 0; j < canvasWidth; j ++) {
-            layer.push(-1);
-          }
-        }
+        var layer = {id: layerIdCounter++, visible: true, pixels: []};
         layers.push(layer);
+        addLayerDiv(layer);
+      };
+
+      var addLayerDiv = function(layer)  {
+        // create dom item for layer
+        var layersDiv = document.getElementById("layers");
+
+        var layerDiv = document.createElement("div");
+        layerDivs.push(layerDiv);
+        layerDiv.classList.add("layerDiv");
+
+        var visibleCB = document.createElement("input");
+        visibleCB.type = "checkbox";
+        visibleCB.checked = layer.visible;
+        visibleCB.onclick = function(event) {
+          layer.visible = this.checked;
+          updateCompositeJSON();
+          render();
+        };
+        
+        var clickableSpan = document.createElement("span");
+        clickableSpan.classList.add("clickableSpan");
+        // select this div and deselect all the others
+        clickableSpan.onclick = function(event) {
+          layerDivs.forEach(function(layerDiv) {
+            layerDiv.classList.remove("selected");
+          });
+          layerDiv.classList.add("selected");
+          selectedLayer = layer;
+        };
+        
+        layerDiv.appendChild(visibleCB);
+        layerDiv.appendChild(clickableSpan);
+        
+        layersDiv.appendChild(layerDiv);
+
+        selectedLayer = layer;
+        clickableSpan.onclick();
       };
 
       var resizeCanvas = function() {
-        var i, j, x, y, layer;
         var drawingArea = document.getElementById("drawingArea");
         var canvas = document.getElementById("canvas");
         // find min width/height (size of rect with used pixels) and don't resize below that point
-        var lowestX = -1;
-        var lowestY = -1;
-        var highestX = -1;
-        var highestY = -1;
-        for (i = 0; i < layers.length; i ++) {
-          layer = layers[i];
-          for (j = 0; j < layer.length; j ++) {
-            if (layer[j] == -1)
-              continue;
-            x = j % canvasWidth;
-            y = Math.floor(j / canvasWidth);
-            if (lowestX == -1 || x < lowestX)
-              lowestX = x;
-            if (highestX == -1 || x > highestX)
-              highestX = x;
-            if (lowestY == -1 || y < lowestY)
-              lowestY = y;
-            if (highestY == -1 || y < highestY)
-              highestY = y;
-          }
-        }
+        var lowestX = frameX;
+        var lowestY = frameY;
+        var highestX = frameX + frameWidth;
+        var highestY = frameY + frameHeight;
+        layers.forEach(function(layer) {
+          layer.pixels.forEach(function(pixel) {
+            if (pixel.x < lowestX)
+              lowestX = pixel.x;
+            if (pixel.x > highestX)
+              highestX = pixel.x;
+            if (pixel.y < lowestY)
+              lowestY = pixel.y;
+            if (pixel.y > highestY)
+              highestY = pixel.y;
+          });
+        });
+
         var minWidth = highestX - lowestX + 1;
         var minHeight = highestY - lowestY + 1;
 
@@ -123,39 +175,13 @@
         previewCanvas.width = frameWidth;
         previewCanvas.height = frameHeight;
 
-
-        // resizeLayers
-        // if layers aren't the same size as the new ones, then resize'em
         // try and put the guide in the center
         var newFrameX = Math.round(newWidth / 2 - frameWidth / 2);
         var newFrameY = Math.round(newHeight / 2 - frameHeight / 2);
-        var pixelDeltaX = newFrameX - frameX;
-        var pixelDeltaY = newFrameY - frameY;
-        // move pixels relative to frame
-        var newLayers = [];
-        for (i = 0; i < layers.length; i ++) {
-          var newLayer = [];
-          newLayers.push(newLayer);
-          for (j = 0; j < newWidth * newHeight; j ++) {
-            newLayer.push(-1);
-          }
-        }
-
-        // copy data from layers into newLayers
-        for (i = 0; i < layers.length; i ++) {
-          var layer = layers[i];
-          for (j = 0; j < layer.length; j ++) {
-            if (layer[j] == -1)
-              continue;
-            x = j % canvasWidth;
-            y = Math.floor(j / canvasWidth);
-            newLayers[i][x + pixelDeltaX + (y + pixelDeltaY) * newWidth] = layer[j];
-          }
-        }
-
-        layers = newLayers;
+        
         frameX = newFrameX;
         frameY = newFrameY;
+        
         canvasWidth = newWidth;
         canvasHeight = newHeight;
 
@@ -172,7 +198,7 @@
           var lineSpacing = 20 + lineWidth;
           var canvasSize = (canvas.width >= canvas.height) ? canvas.width * 2 : canvas.height * 2;
           // for (i = 1; i < canvas.width * 2; i += lineSpacing) {
-          for (i = 1; i < canvasSize; i += lineSpacing) {
+          for (var i = 1; i < canvasSize; i += lineSpacing) {
             context.beginPath();
             context.moveTo(i, 0);
             context.lineTo(0, i);
@@ -187,12 +213,12 @@
         var drawPixels = function() {
           for (var i = 0; i < layers.length; i ++) {
             var layer = layers[i];
-            for (var j = 0; j < layer.length; j ++) {
-              var pixel = layer[j];
-              if (pixel == -1)
-                continue;
-              context.fillStyle = "rgba(" + colors[pixel].red + "," + colors[pixel].green + "," + colors[pixel].blue + "," + colors[pixel].alpha + ")";
-              context.fillRect((j % canvasWidth) * zoom, Math.floor(j / canvasWidth) * zoom, zoom, zoom);
+            if (!layer.visible)
+              continue;
+            for (var j = 0; j < layer.pixels.length; j ++) {
+              var pixel = layer.pixels[j];
+              context.fillStyle = "rgba(" + colors[pixel.color].red + "," + colors[pixel.color].green + "," + colors[pixel.color].blue + "," + colors[pixel.color].alpha + ")";
+              context.fillRect(pixel.x * zoom + frameX * zoom, pixel.y * zoom + frameY * zoom, zoom, zoom);
             }
           }
         };
@@ -202,7 +228,7 @@
 
         // TODO: fix update preview. Throwing some weird DOM error 
         // update preview
-        previewContext = previewCanvas.getContext("2d");
+        var previewContext = previewCanvas.getContext("2d");
         previewContext.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
         previewContext.drawImage(canvas, frameX * zoom, frameY * zoom, frameWidth * zoom, frameHeight * zoom, 0, 0, previewCanvas.width, previewCanvas.height);
         var dataURL = previewCanvas.toDataURL();
@@ -328,6 +354,11 @@
           else if (handleCollision == "right")
             state = "resizeRight";
         }
+        else if (selectedTool == "mover") {
+          state = "move";
+          moverX = event.offsetX;
+          moverY = event.offsetY;
+        }
         else {
           state = "draw";
           draw(event.offsetX, event.offsetY, true);
@@ -336,10 +367,59 @@
         window.addEventListener("mouseup", onWindowMouseUp, true);
       };
 
+      var moveFrameXY = function(x, y) {
+        var deltaX = frameX - x;
+        var deltaY = frameY - y;
+
+        // move all layer pixels
+        layers.forEach(function(layer) {
+          layer.pixels.forEach(function(pixel) {
+            pixel.x += deltaX;
+            pixel.y += deltaY;
+          });
+        });
+        
+        frameX = x;
+        frameY = y;
+      };
+
       var onCanvasMouseMove = function(event) {
         var handleCollision = checkHandleCollision(event.offsetX, event.offsetY);
         if (state == "draw")
           draw(event.offsetX, event.offsetY, true);
+        else if (state == "move") {
+          var deltaX = event.offsetX - moverX;
+          while (deltaX > zoom) {
+            deltaX -= zoom;
+            moverX += zoom;
+            selectedLayer.pixels.forEach(function(pixel) {
+              pixel.x++;
+            });
+          }
+          while (deltaX < -zoom) {
+            deltaX += zoom;
+            moverX -= zoom;
+            selectedLayer.pixels.forEach(function(pixel) {
+              pixel.x--;
+            });
+          }
+          var deltaY = event.offsetY - moverY;
+          while (deltaY > zoom) {
+            deltaY -= zoom;
+            moverY += zoom;
+            selectedLayer.pixels.forEach(function(pixel) {
+              pixel.y++;
+            });
+          }
+          while (deltaY < -zoom) {
+            deltaY += zoom;
+            moverY -= zoom;
+            selectedLayer.pixels.forEach(function(pixel) {
+              pixel.y--;
+            });
+          }
+          render();
+        }
         else if (state == "resizeTop" || state == "resizeBottom") {
           if (state == "resizeTop")
             var handleY = frameY * zoom;
@@ -348,7 +428,7 @@
           var yDist = Math.round((event.offsetY - handleY) / zoom);
           if (yDist) {
             if (state == "resizeTop" && frameHeight - yDist >= 1) {
-              frameY += yDist;
+              moveFrameXY(frameX, frameY + yDist);
               frameHeight += -yDist;
             }
             else if (state == "resizeBottom" && frameHeight + yDist >= 1) {
@@ -356,7 +436,7 @@
             }
             frameResized();
             render();
-            updateFrameJson();
+            updateCompositeJSON();
           }
         }
         else if (state == "resizeLeft" || state == "resizeRight") {
@@ -367,7 +447,7 @@
           var xDist = Math.round((event.offsetX - handleX) / zoom);
           if (xDist) {
             if (state == "resizeLeft" && frameWidth - xDist >= 1) {
-              frameX += xDist;
+              moveFrameXY(frameX + xDist, frameY);
               frameWidth += -xDist;
             }
             else if (state == "resizeRight" && frameWidth + xDist >= 1) {
@@ -375,7 +455,7 @@
             }
             frameResized();
             render();
-            updateFrameJson();
+            updateCompositeJSON();
           }
         }
         else if (state == "none" && handleCollision) {
@@ -391,7 +471,7 @@
       var frameResized = function() {
         previewCanvas.width = frameWidth;
         previewCanvas.height = frameHeight;
-        previewImage = document.getElementById("preview");
+        var previewImage = document.getElementById("preview");
         previewImage.width = frameWidth;
         previewImage.height = frameHeight;
 
@@ -405,20 +485,21 @@
       };
 
       var colorSize = 20;
+      var colorsPerRow = Math.floor(220 / colorSize);
       var updateColorPalette = function() {
         var colorPalette = document.getElementById("colorPalette");
+        colorPalette.width = 220;
+        colorPalette.height = Math.ceil(colors.length / colorsPerRow) * colorSize;
         var context = colorPalette.getContext("2d");
-        colorPalette.width = colorSize * colors.length;
-        colorPalette.height = colorSize;
         for (var i = 0; i < colors.length; i ++) {
           var paletteColor = colors[i];
           context.fillStyle = "rgba(" + paletteColor.red + "," + paletteColor.green + "," + paletteColor.blue + ",1)";
-          context.fillRect(i * colorSize, 0, colorSize, colorSize);
+          context.fillRect((i % colorsPerRow) * colorSize, Math.floor(i / colorsPerRow) * colorSize, colorSize, colorSize);
         }
       };
 
       var onColorPaletteMouseDown = function(event) {
-        var colorIndex = Math.floor(event.offsetX / colorSize);
+        var colorIndex = Math.floor(event.offsetX / colorSize) + Math.floor(event.offsetY / colorSize) * colorsPerRow;
         updateSelectedColor(colors[colorIndex].red, colors[colorIndex].green, colors[colorIndex].blue);
         updateLuminosity();
       };
@@ -450,7 +531,9 @@
           x = Math.floor(x / zoom);
           y = Math.floor(y / zoom);
         }
-        if (selectedTool == "pencil") {
+        x -= frameX;
+        y -= frameY;
+        if (selectedTool == "pixeler") {
           // add new color to colors (colorPalette)
           var colorIndex = -1;
           for (var i = 0; i < colors.length; i ++) {
@@ -465,33 +548,66 @@
             updateColorPalette();
           }
 
-          layers[0][x + y * canvasWidth] = colorIndex;
+          // see if we need to update one of the pixels
+          var pixelFound = false;
+          selectedLayer.pixels.forEach(function(pixel) {
+            if (pixel.x == x && pixel.y == y) {
+              pixelFound = true;
+              pixel.color = colorIndex;
+            }
+          });
+          if (!pixelFound) {
+            selectedLayer.pixels.push({x: x, y: y, color: colorIndex});
+          }
         }
         else if (selectedTool == "eraser") {
-          layers[0][x + y * canvasWidth] = -1;
+          selectedLayer.pixels = selectedLayer.pixels.filter(function(pixel) {
+            return (pixel.x != x || pixel.y != y);
+          });
         }
 
         render();
-        updateFrameJson();
+        updateCompositeJSON();
       };
 
-      var updateFrameJson = function() {
+      var updateCompositeJSON = function() {
         var hexColors = [];
-        for (i = 0; i < colors.length; i ++)
-          hexColors.push(intToHex(colors[i].red, 2) + intToHex(colors[i].green, 2) + intToHex(colors[i].blue, 2));
+        colors.forEach(function(color) {
+          hexColors.push(intToHex(color.red, 2) + intToHex(color.green, 2) + intToHex(color.blue, 2));
+        });
         var pixelsInFrame = [];
-        for (i = 0; i < frameHeight; i ++) {
-          for (j = 0; j < frameWidth; j ++) {
-            pixelsInFrame.push(layers[0][frameX + j + frameY * canvasWidth + i * canvasWidth]);
+        for (var i = 0; i < frameHeight; i ++) {
+          for (var j = 0; j < frameWidth; j ++) {
+            pixelsInFrame.push(-1);
           }
         }
-        // TODO: fix json display by cropping out stuff outside frame (have a separate json for the project)
+        layers.forEach(function(layer) {
+          layer.pixels.filter(function(pixel) {
+            return (pixel.x >= 0 && pixel.x < frameWidth && pixel.y >= 0 && pixel.y < frameHeight);
+          }).forEach(function(pixel) {
+            pixelsInFrame[pixel.x + pixel.y * frameWidth] = pixel.color;
+          });
+        });
+
         var displayJsonText = JSON.stringify({
           colors: hexColors,
           width: frameWidth,
           pixels: pixelsInFrame,
         });
         document.getElementById("jsonDisplay").value = displayJsonText;
+
+        updateProjectJSON();
+      };
+
+      var updateProjectJSON = function() {        
+        var displayJsonText = JSON.stringify({
+          colors: colors,
+          frameWidth: frameWidth,
+          frameHeight: frameHeight,
+          layers: layers,
+          layerIdCounter: layerIdCounter
+        });
+        document.getElementById("projectJsonDisplay").value = displayJsonText;
       };
 
       var onColorLuminosityMouseDown = function(event) {
@@ -501,10 +617,10 @@
       };
 
       var updateLuminosity = function(event) {
-        canvas = document.getElementById("colorLuminosity");
+        var canvas = document.getElementById("colorLuminosity");
         canvas.width = 10 * colorSize;
         canvas.height = colorSize;
-        context = canvas.getContext("2d");
+        var context = canvas.getContext("2d");
 
         // var hue = .5;
         // var saturation = .5;
@@ -543,12 +659,8 @@
         render();
       };
 
+      // TODO: remove this?
       var onJsonDisplayChange = function(event) {
-        // var displayJsonText = JSON.stringify({
-        //   colors: hexColors,
-        //   width: frameWidth,
-        //   pixels: pixelsInFrame,
-        // });
         var jsonText = document.getElementById("jsonDisplay").value;
         try {
           var json = JSON.parse(jsonText);
@@ -572,13 +684,20 @@
           updateColorPalette();
           
           layers = [];
+          var layersDiv = document.getElementById("layers");
+          while (layersDiv.firstChild) {
+              layersDiv.removeChild(layersDiv.firstChild);
+          }
+
           addLayer();
           frameWidth = parseInt(json.width);
           frameHeight = json.pixels.length / frameWidth;
           frameResized();
           for (var i = 0; i < frameHeight; i ++) {
             for (var j = 0; j < frameWidth; j ++) {
-              layers[0][frameX + j + frameY * canvasWidth + i * canvasWidth] = json.pixels[j + i * frameWidth];
+              if (json.pixels[j + i * frameWidth] == -1)
+                continue;
+              layers[0].pixels.push({x: j, y: i, color: json.pixels[j + i * frameWidth]});
             }
           }
           render();
@@ -586,6 +705,44 @@
         catch (error) {
         }
       };
+
+      var onProjectJsonDisplayChange = function(event) {
+        var displayJsonText = JSON.stringify({
+          colors: colors,
+          frameWidth: frameWidth,
+          frameHeight: frameHeight,
+          layers: layers,
+          layerIdCounter: layerIdCounter
+        });
+
+        var jsonText = document.getElementById("projectJsonDisplay").value;
+        try {
+          var json = JSON.parse(jsonText);
+          colors = json.colors;
+          frameWidth = json.frameWidth;
+          frameHeight = json.frameHeight;
+          
+          layers = json.layers;
+          var layersDiv = document.getElementById("layers");
+          while (layersDiv.firstChild) {
+              layersDiv.removeChild(layersDiv.firstChild);
+          }
+          layers.forEach(function(layer) {
+            addLayerDiv(layer);
+          });
+          layerIdCounter = layerIdCounter;
+        }
+        catch (error) {
+        }
+        frameResized();
+        updateColorPalette();
+        resizeCanvas();
+        render();
+      };
+
+      var onAddLayer = function() {
+        addLayer();
+      }
 
       var rgbToHsl = function(r, g, b) {
         r /= 255, g /= 255, b /= 255;
@@ -609,19 +766,19 @@
       }
 
       var hslToRgb = function(h, s, l) {
+        function hue2rgb(p, q, t) {
+          if(t < 0) t += 1;
+          if(t > 1) t -= 1;
+          if(t < 1/6) return p + (q - p) * 6 * t;
+          if(t < 1/2) return q;
+          if(t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+          return p;
+        }
         var r, g, b;
 
         if(s == 0)
             r = g = b = l; // achromatic
         else {
-          function hue2rgb(p, q, t) {
-            if(t < 0) t += 1;
-            if(t > 1) t -= 1;
-            if(t < 1/6) return p + (q - p) * 6 * t;
-            if(t < 1/2) return q;
-            if(t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-            return p;
-          }
 
           var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
           var p = 2 * l - q;
@@ -647,8 +804,9 @@
           <div class="separator"></div>
           <h4>Tool</h4>
           <select id="toolSelect" onchange="onToolSelectChange(event)">
-            <option value="pencil">Pencil</option>
+            <option value="pixeler">Pixeler</option>
             <option value="eraser">Eraser</option>
+            <option value="mover">Mover</option>
           </select>
           <div class="separator"></div>
         </div>
@@ -664,8 +822,13 @@
           <div class="separator"></div>
         </div>
         <div>
-          <h4>JSON</h4>
+          <h4>Composite JSON</h4>
           <textarea id="jsonDisplay" cols="30" rows="8" onkeyup="onJsonDisplayChange(event)"></textarea>
+          <div class="separator"></div>
+        </div>
+        <div>
+          <h4>Project JSON</h4>
+          <textarea id="projectJsonDisplay" cols="30" rows="8" onkeyup="onProjectJsonDisplayChange(event)"></textarea>
           <div class="separator"></div>
         </div>
       </div>
@@ -679,6 +842,8 @@
         <h4>Frames</h4>
         <div class="separator"></div>
         <h4>Layers</h4>
+        <button onclick="onAddLayer(event)">Add Layer</button>
+        <div id="layers"></div>
         <div class="separator"></div>
       </div>
     </div>
