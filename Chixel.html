@@ -39,13 +39,14 @@
       display: inline-block;
       width: 80%;
       height: 30px;
-      background-color: #00FF00;
+      /*background-color: #00FF00;*/
     }
 
     .selected {
       background-color: LightSkyBlue;
     }
     </style>
+    <script src="Utils.js"></script>
     <script type="text/javascript">
       "use strict";
       var selectedColor = {red:0, green:0, blue:0, alpha:1};
@@ -94,6 +95,7 @@
 
       var addLayer = function() {
         var layer = {id: layerIdCounter++, visible: true, pixels: []};
+        layer.name = "Layer " + layer.id;
         layers.push(layer);
         addLayerDiv(layer);
       };
@@ -117,14 +119,37 @@
         
         var clickableSpan = document.createElement("span");
         clickableSpan.classList.add("clickableSpan");
+        var layerNameLabel = document.createElement("div");
+        if (!layer.name)
+          layer.name = "Layer " + layer.id;
+        layerNameLabel.innerText = layer.name;
+        var layerNameInput = document.createElement("input");
+        layerNameInput.type = "text";
+        layerNameInput.onblur = function(event) {
+          clickableSpan.removeChild(layerNameInput);
+          layer.name = layerNameLabel.innerText = layerNameInput.value;
+          clickableSpan.appendChild(layerNameLabel);
+        };
+
         // select this div and deselect all the others
         clickableSpan.onclick = function(event) {
+          console.log("click!");
           layerDivs.forEach(function(layerDiv) {
             layerDiv.classList.remove("selected");
           });
           layerDiv.classList.add("selected");
           selectedLayer = layer;
         };
+
+        clickableSpan.ondblclick = function(event) {
+          console.log("double click!");
+          layerNameInput.value = layerNameLabel.innerText;
+          clickableSpan.removeChild(layerNameLabel);
+          clickableSpan.appendChild(layerNameInput);
+          layerNameInput.focus();
+        };
+
+        clickableSpan.appendChild(layerNameLabel);
         
         layerDiv.appendChild(visibleCB);
         layerDiv.appendChild(clickableSpan);
@@ -582,6 +607,8 @@
           }
         }
         layers.forEach(function(layer) {
+          if (!layer.visible)
+            continue;
           layer.pixels.filter(function(pixel) {
             return (pixel.x >= 0 && pixel.x < frameWidth && pixel.y >= 0 && pixel.y < frameHeight);
           }).forEach(function(pixel) {
@@ -739,6 +766,10 @@
         updateColorPalette();
         resizeCanvas();
         render();
+      };
+
+      var exportLayersAsFrames = function() {
+
       };
 
       var onAddLayer = function() {
