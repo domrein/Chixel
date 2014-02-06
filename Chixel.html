@@ -608,7 +608,7 @@
         }
         layers.forEach(function(layer) {
           if (!layer.visible)
-            continue;
+            return;
           layer.pixels.filter(function(pixel) {
             return (pixel.x >= 0 && pixel.x < frameWidth && pixel.y >= 0 && pixel.y < frameHeight);
           }).forEach(function(pixel) {
