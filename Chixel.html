@@ -58,6 +58,8 @@
       var canvasWidth = 0;
       var canvasHeight = 0;
 
+      // TODO: make it so that each layer (each image or frame) has its own frame you can move around
+      //   so we can make the auto packer/exporter
       // width/height/x/y of exportable image area
       var frameWidth = 8;
       var frameHeight = 8;
@@ -98,6 +100,8 @@
         layer.name = "Layer " + layer.id;
         layers.push(layer);
         addLayerDiv(layer);
+
+        return layer;
       };
 
       var addLayerDiv = function(layer)  {
@@ -120,6 +124,7 @@
         var clickableSpan = document.createElement("span");
         clickableSpan.classList.add("clickableSpan");
         var layerNameLabel = document.createElement("div");
+        layerNameLabel.id = "layerNameLabel" + layer.id;
         if (!layer.name)
           layer.name = "Layer " + layer.id;
         layerNameLabel.innerText = layer.name;
@@ -158,6 +163,17 @@
 
         selectedLayer = layer;
         clickableSpan.onclick();
+      };
+
+      var duplicateLayer = function() {
+        var src = selectedLayer;
+        var dup = addLayer();
+        dup.name = src.name + " Dup";
+        var dupNameLabel = document.getElementById("layerNameLabel" + dup.id)
+        dupNameLabel.innerText = dup.name;
+        src.pixels.forEach(function(pixel) {
+          dup.pixels.push({x: pixel.x, y: pixel.y, color: pixel.color});
+        });
       };
 
       var resizeCanvas = function() {
@@ -774,7 +790,11 @@
 
       var onAddLayer = function() {
         addLayer();
-      }
+      };
+
+      var onDuplicateLayer = function() {
+        duplicateLayer();
+      };
 
       var rgbToHsl = function(r, g, b) {
         r /= 255, g /= 255, b /= 255;
@@ -875,6 +895,7 @@
         <div class="separator"></div>
         <h4>Layers</h4>
         <button onclick="onAddLayer(event)">Add Layer</button>
+        <button onclick="onDuplicateLayer(event)">Duplicate Layer</button>
         <div id="layers"></div>
         <div class="separator"></div>
       </div>
