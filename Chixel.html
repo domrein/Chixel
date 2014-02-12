@@ -81,6 +81,13 @@
       var moverX = 0;
       var moverY = 0;
 
+      // data for rect selection (recter)
+      var rectSelectX = 0;
+      var rectSelectY = 0;
+
+      var mouseX = -1;
+      var mouseY = -1;
+
       var onLoad = function(event) {
         previewCanvas = document.createElement("canvas");
         effectsCanvas = document.createElement("canvas");
@@ -203,14 +210,19 @@
         // TODO: dynamically fetch -40 to account for padding
         var newWidth = Math.floor((drawingArea.offsetWidth - 40) / zoom);
         var newHeight = Math.floor(drawingArea.offsetHeight / zoom);
-        if (newWidth < minWidth)
-          newWidth = minWidth;
-        if (newHeight < minHeight)
-          newHeight = minHeight;
-        canvas.width = newWidth * zoom;
-        canvas.height = newHeight * zoom;
-        effectsCanvas.width = newWidth * zoom;
-        effectsCanvas.height = newHeight * zoom;
+        
+        canvas.width = effectsCanvas.width = drawingArea.offsetWidth - 40;
+        canvas.height = effectsCanvas.height = drawingArea.offsetHeight - 8; // -8 to account for vertical border
+
+        // if (newWidth < minWidth)
+        //   newWidth = minWidth;
+        // if (newHeight < minHeight)
+        //   newHeight = minHeight;
+        // canvas.width = newWidth * zoom;
+        // canvas.height = newHeight * zoom;
+        // effectsCanvas.width = newWidth * zoom;
+        // effectsCanvas.height = newHeight * zoom;
+
         // TODO: center canvas in drawingArea (maybe do that in css?)
 
         previewCanvas.width = frameWidth;
@@ -324,6 +336,13 @@
         drawHandle("right");
 
         context.drawImage(effectsCanvas, 0, 0);
+
+        // draw targeter
+        if (mouseX != -1 && mouseY != -1) {
+          context.fillStyle = "rgba(150, 150, 150, .25)";
+          context.fillRect(0, mouseY * zoom, canvas.width, zoom);
+          context.fillRect(mouseX * zoom, 0, zoom, canvas.height);
+        }
       };
 
       var checkHandleCollision = function(x, y) {
@@ -383,6 +402,7 @@
       };
 
       var onCanvasMouseDown = function(event) {
+        updateMouseXY(event);
         // if we're above a handle, then resize on drag
         var handleCollision = checkHandleCollision(event.offsetX, event.offsetY);
         if (handleCollision) {
@@ -399,6 +419,11 @@
           state = "move";
           moverX = event.offsetX;
           moverY = event.offsetY;
+        }
+        else if (selectedTool == "recter") {
+          state = "rectSelect";
+          rectSelectX = mouseX;
+          rectSelectY = mouseY;
         }
         else {
           state = "draw";
@@ -424,7 +449,13 @@
         frameY = y;
       };
 
+      var updateMouseXY = function(event) {
+        mouseX = Math.floor(event.offsetX / zoom);
+        mouseY = Math.floor(event.offsetY / zoom);
+      };
+
       var onCanvasMouseMove = function(event) {
+        updateMouseXY(event);
         var handleCollision = checkHandleCollision(event.offsetX, event.offsetY);
         if (state == "draw")
           draw(event.offsetX, event.offsetY, true);
@@ -459,7 +490,11 @@
               pixel.y--;
             });
           }
-          render();
+        }
+        else if (state == "rectSelect") {
+          // snap rect to best x/y
+          // render rectangle on screen
+
         }
         else if (state == "resizeTop" || state == "resizeBottom") {
           if (state == "resizeTop")
@@ -476,7 +511,6 @@
               frameHeight += yDist;
             }
             frameResized();
-            render();
             updateCompositeJSON();
           }
         }
@@ -495,7 +529,6 @@
               frameWidth += xDist;
             }
             frameResized();
-            render();
             updateCompositeJSON();
           }
         }
@@ -507,7 +540,53 @@
         }
         else if (document.body.style.cursor != "auto")
             document.body.style.cursor = "auto";
+        render();
       };
+
+      var onCanvasMouseUp = function(event) {
+        updateMouseXY(event);
+        if (selectedTool == "recter") {
+          if (mouseX - rectSelectX == 0 || mouseY - rectSelectY == 0)
+            return;
+          // fill in the selection with the selected color
+          if (rectSelectX < mouseX) {
+            var startX = rectSelectX;
+            var endX = mouseX;
+          }
+          else {
+            startX = mouseX;
+            endX = rectSelectX;
+          }
+          if (rectSelectY < mouseY) {
+            var startY = rectSelectY;
+            var endY = mouseY;
+          }
+          else {
+            startY = mouseY;
+            endY = rectSelectY;
+          }
+          startX -= frameX;
+          endX -= frameX;
+          startY -= frameY;
+          endY -= frameY;
+          selectedLayer.pixels = selectedLayer.pixels.filter(function(pixel) {
+            return (pixel.x < startX || pixel.x > endX || pixel.y < startY || pixel.y > endY);
+          });
+          for (var i = 0; i <= endY - startY; i ++) {
+            for (var j = 0; j <= endX - startX; j ++) {
+              selectedLayer.pixels.push({x: j + startX, y: i + startY, color: findSelectedColorIndex()});
+            }
+          }
+          render();
+          updateCompositeJSON();
+        }
+      };
+
+      var onCanvasMouseOut = function(event) {
+        mouseX = -1;
+        mouseY = -1;
+        render();
+      }
 
       var frameResized = function() {
         previewCanvas.width = frameWidth;
@@ -566,6 +645,24 @@
         return hex;
       };
 
+      // add new color to colors (colorPalette)
+      var findSelectedColorIndex = function() {
+        var colorIndex = -1;
+        for (var i = 0; i < colors.length; i ++) {
+          var paletteColor = colors[i];
+          if (selectedColor.red == paletteColor.red &&
+            selectedColor.green == paletteColor.green &&
+            selectedColor.blue == paletteColor.blue)
+            colorIndex = i;
+        }
+        if (colorIndex == -1) {
+          colorIndex = colors.push(selectedColor) - 1;
+          updateColorPalette();
+        }
+
+        return colorIndex;
+      };
+
       var draw = function(x, y, rawCoords) {
         // offsetX, offsetY
         if (rawCoords) {
@@ -575,19 +672,7 @@
         x -= frameX;
         y -= frameY;
         if (selectedTool == "pixeler") {
-          // add new color to colors (colorPalette)
-          var colorIndex = -1;
-          for (var i = 0; i < colors.length; i ++) {
-            var paletteColor = colors[i];
-            if (selectedColor.red == paletteColor.red &&
-              selectedColor.green == paletteColor.green &&
-              selectedColor.blue == paletteColor.blue)
-              colorIndex = i;
-          }
-          if (colorIndex == -1) {
-            colorIndex = colors.push(selectedColor) - 1;
-            updateColorPalette();
-          }
+          var colorIndex = findSelectedColorIndex();
 
           // see if we need to update one of the pixels
           var pixelFound = false;
@@ -857,6 +942,7 @@
           <h4>Tool</h4>
           <select id="toolSelect" onchange="onToolSelectChange(event)">
             <option value="pixeler">Pixeler</option>
+            <option value="recter">Recter</option>
             <option value="eraser">Eraser</option>
             <option value="mover">Mover</option>
           </select>
@@ -885,7 +971,7 @@
         </div>
       </div>
       <div id="drawingArea" class="drawingArea">
-        <canvas id="canvas" style="border-color:#000000; border-width:2px; border-style:solid; user-select:none; " onmousedown="onCanvasMouseDown(event)" onmousemove="onCanvasMouseMove(event)"></canvas>
+        <canvas id="canvas" style="border-color:#000000; border-width:2px; border-style:solid; user-select:none; " onmousedown="onCanvasMouseDown(event)" onmousemove="onCanvasMouseMove(event)" onmouseup="onCanvasMouseUp(event)" onmouseout="onCanvasMouseOut(event)"></canvas>
       </div>
       <div class="sidebar">
         <h4>Preview</h4>
