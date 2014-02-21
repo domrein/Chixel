@@ -427,7 +427,7 @@
         }
         else {
           state = "draw";
-          draw(event.offsetX, event.offsetY, true);
+          draw(mouseX, mouseY);
         }
 
         window.addEventListener("mouseup", onWindowMouseUp, true);
@@ -450,15 +450,16 @@
       };
 
       var updateMouseXY = function(event) {
-        mouseX = Math.floor(event.offsetX / zoom);
-        mouseY = Math.floor(event.offsetY / zoom);
+        mouseX = Math.floor((event.offsetX - 3) / zoom);
+        mouseY = Math.floor((event.offsetY - 3) / zoom);
+        document.getElementById("coordDisplay").innerText = (mouseX - frameX) + ", " + (mouseY - frameY);
       };
 
       var onCanvasMouseMove = function(event) {
         updateMouseXY(event);
         var handleCollision = checkHandleCollision(event.offsetX, event.offsetY);
         if (state == "draw")
-          draw(event.offsetX, event.offsetY, true);
+          draw(mouseX, mouseY);
         else if (state == "move") {
           var deltaX = event.offsetX - moverX;
           while (deltaX > zoom) {
@@ -663,12 +664,8 @@
         return colorIndex;
       };
 
-      var draw = function(x, y, rawCoords) {
+      var draw = function(x, y) {
         // offsetX, offsetY
-        if (rawCoords) {
-          x = Math.floor(x / zoom);
-          y = Math.floor(y / zoom);
-        }
         x -= frameX;
         y -= frameY;
         if (selectedTool == "pixeler") {
@@ -932,6 +929,9 @@
     <div style="display:flex; flex-direction:row;">
       <div id="controls" class="sidebar">
         <div>
+          <h4>Frame Coords</h4>
+          <div id="coordDisplay"></div>
+          <div class="separator"></div>
           <h4>Color</h4>
           <input id="colorInput" onchange="onColorPickerChange(event)" type="color" value="#000000"></input>
           <canvas id="colorLuminosity" onmousedown="onColorLuminosityMouseDown(event)" width="20" height="20"></canvas>
